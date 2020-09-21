@@ -1,0 +1,11 @@
+# Don't include object files
+*.o
+
+# Don't include depdency files
+*.d
+
+# Don't include target files
+*.bpf
+
+# Don't include user target file
+*.bin

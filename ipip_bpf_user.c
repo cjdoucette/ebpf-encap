@@ -93,22 +93,22 @@ long bpf_map_lookup_elem(unsigned int fd, void *key, void *value) {
 static const char *TC_GLOBAL_NS = "/sys/fs/bpf/tc/globals";
 
 /**
- * The name of the BPF MAP variable in mpls_bpf_berk.c
+ * The name of the BPF MAP variable in ipip_bpf_kern.c
  */
 static const char *BPF_MAP_NAME = "DEBUGS_MAP";
 
-const char *argp_program_version = "mpls_bpf_user 1.0";
-const char *argp_program_bug_address = "<farid.m.zakaria@gmail.com>";
+const char *argp_program_version = "ipip_bpf_kern 1.0";
+const char *argp_program_bug_address = "<doucette@bu.edu>";
 
 /* Program documentation. */
-static char doc[] = "MPLSoIP User-- a program to interfact with the eBPF code.";
+static char doc[] = "A program to interfact with the eBPF code.";
 
 /* A description of the arguments we accept. */
 static char args_doc[] = "[show] [disable|enable]";
 
 /*
-   OPTIONS.  Field 1 in ARGP.
-   Order of fields: {NAME, KEY, ARG, FLAGS, DOC}.
+         OPTIONS.  Field 1 in ARGP.
+         Order of fields: {NAME, KEY, ARG, FLAGS, DOC}.
 */
 static struct argp_option options[] = {
     {0, 0, 0, 0, 0, 0},

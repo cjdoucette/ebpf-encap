@@ -1,6 +1,17 @@
 # ebpf-encap
 eBPF program to perform IPIP encapsulation
 
+sudo ip route add 172.31.3.200/32 encap bpf xmit obj /home/ubuntu/ebpf-encap/mpls.bpf sec encap_gre dev ens5
+
+sudo ./mpls.bin enable
+
+echo 1 > /sys/kernel/debug/tracing/tracing_on
+sudo cat /sys/kernel/debug/tracing/trace_pipe
+
+nc -w 0 -u 172.31.3.200 8080 <<< 'hello, world'
+
+
+
 > This is a small tiny BPF filter that demonstrates how to encap/decap an IPv4 packet with MPLS.
 
 The goal of this project is to be a good learning resource & skeleton project of how to setup

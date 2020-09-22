@@ -7,11 +7,12 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <stdbool.h>
+
 #include "bpf_endian.h"
 #include "bpf_helpers.h"
 #include "helpers.h"
 
-static struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
+struct bpf_elf_map SEC("maps") DEBUGS_MAP = {
     .type = BPF_MAP_TYPE_ARRAY,
     .size_key = sizeof(unsigned int),
     .size_value = sizeof(bool),
@@ -99,7 +100,6 @@ SEC("ipip_encap") int ipip_encap_filter(struct __sk_buff *skb) {
   // Generate a unique request id so we can identify each flow in
   // the trace logs
   unsigned long long request_id = bpf_get_prandom_u32();
-  DEBUG_ENCAP(request_id, "starting ipip encap.\n");
 
   /*
    * the redundant casts are needed according to the documentation.
@@ -108,42 +108,11 @@ SEC("ipip_encap") int ipip_encap_filter(struct __sk_buff *skb) {
    */
   void *data_end = (void *)(long)skb->data_end;
   void *data = (void *)(long)skb->data;
-
-  // The packet starts with the ethernet header, so let's get that going:
-  struct ethhdr *eth = (struct ethhdr *)(data);
-
-  /*
-   * Now, we can't just go "eth->h_proto", that's illegal.  We have to
-   * explicitly test that such an access is in range and doesn't go
-   * beyond "data_end" -- again for the verifier.
-   * The eBPF verifier will see that "eth" holds a packet pointer,
-   * and also that you have made sure that from "eth" to "eth + 1"
-   * is inside the valid access range for the packet.
-   */
-  if ((void *)(eth + 1) > data_end) {
-    DEBUG_ENCAP(request_id, "socket buffer struct was malformed.\n");
-    return TC_ACT_SHOT;
-  }
-
-  DEBUG_ENCAP(request_id, "casted to eth header.\n");
-
-  /*
-   * We only care about IP packet frames. Don't do anything to other ethernet
-   * packets like ARP.
-   * hton -> host to network order. Network order is always big-endian.
-   * pedantic: the protocol is also directly accessible from __sk_buf
-   */
-  if (eth->h_proto != bpf_htons(ETH_P_IP)) {
-    DEBUG_ENCAP(request_id, "ethernet is not wrapping IP packet: 0x%x\n",
-                bpf_ntohs(eth->h_proto));
-    return TC_ACT_OK;
-  }
-
-  struct iphdr *iph = (struct iphdr *)(void *)(eth + 1);
+  struct iphdr *iph = (struct iphdr *)(data);
 
   if ((void *)(iph + 1) > data_end) {
     DEBUG_ENCAP(request_id, "socket buffer struct was malformed.\n");
-    return TC_ACT_SHOT;
+    return BPF_DROP;
   }
 
   DEBUG_ENCAP(request_id, "casted to ip header.\n");
@@ -152,16 +121,18 @@ SEC("ipip_encap") int ipip_encap_filter(struct __sk_buff *skb) {
   int iph_len = iph->ihl << 2;
   if (iph_len > MAX_IP_HDR_LEN) {
     DEBUG_ENCAP(request_id, "ip header is too long: %d\n", iph_len);
-    return TC_ACT_SHOT;
+    return BPF_DROP;
   }
 
   DEBUG_ENCAP(request_id, "calculated ip header length.\n");
 
   int sport = get_sport(iph, data_end, iph->protocol);
-  if (sport == -1) return TC_ACT_SHOT;
+  if (sport == -1) return BPF_DROP;
+
+  // if (iph->daddr != htonl(0xac1f03c8)) return TC_ACT_OK;
 
   if (sport == 22)  // SSH
-    return TC_ACT_OK;
+    return BPF_OK;
 
   struct iphdr outer_iph = {0};
   int err;
@@ -171,14 +142,14 @@ SEC("ipip_encap") int ipip_encap_filter(struct __sk_buff *skb) {
   outer_iph.ttl = 0x40;
   outer_iph.protocol = IPPROTO_IPIP;
   outer_iph.saddr = iph->saddr;
-  outer_iph.daddr = bpf_htonl(0xac1f0153);
+  outer_iph.daddr = bpf_htonl(0xac1f012b);
   outer_iph.tot_len = bpf_htons((__u16)skb->len + sizeof(outer_iph));
 
   err =
       bpf_lwt_push_encap(skb, BPF_LWT_ENCAP_IP, &outer_iph, sizeof(outer_iph));
-  if (err) return TC_ACT_SHOT;
+  if (err) return BPF_DROP;
 
-  return TC_ACT_OK;
+  return BPF_LWT_REROUTE;
 }
 
 static char _license[] SEC("license") = "GPL";
